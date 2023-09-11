@@ -250,13 +250,14 @@ def HorizGrid(config_fn, stmp):
          )
 
       nx_t6sg = grid_info["GFDLgrid_NUM_CELLS"] * 2
+      NHW = grid_params["NHW"]
 
       # Change directories to the working directory
       os.chdir(work_path)
 
       print(f"inputs: \n"
             f"--grid_type gnomonic_ed "
-            f"--nlon {grid_params['NX']} "
+            f"--nlon {nx_t6sg} "
             f"--grid_name {grid_type} "
             f"--do_schmidt "
             f"--stretch_factor {grid_params['STRETCH_FAC']} \n"
@@ -273,7 +274,7 @@ def HorizGrid(config_fn, stmp):
       # Run the GFDL grid creation application; creates regional_grid.nc
       ret_val = os.system(f"./make_hgrid "
             f"--grid_type gnomonic_ed "
-            f"--nlon {grid_params['NX']} "
+            f"--nlon {nx_t6sg} "
             f"--grid_name {grid_type} "
             f"--do_schmidt "
             f"--stretch_factor {grid_params['STRETCH_FAC']} "
@@ -300,16 +301,22 @@ def HorizGrid(config_fn, stmp):
       if ret_val != 0:
          raise RuntimeError("global_equiv_resol failed! Exiting...")
 
-      # Get the CRES equivalent from the regional_grid.nc file
-      grid_nc = Dataset("regional_grid.nc")
-      CRES = grid_nc.getncattr('RES_equiv')
-      CRES = f"C{CRES}"
-      grid_nc.close()
+      # Get the CRES equivalent from the regional grid (tile 7)
+      grid_fn = "GFDLgrid.tile7.nc"
+      if grid_info["GFDLgrid_USE_NUM_CELLS_IN_FILENAMES"]:
+         CRES=f"C{grid_info['GFDLgrid_NUM_CELLS']}"
+      else:
+         grid_nc = Dataset(grid_fn)
+         CRES = grid_nc.getncattr('RES_equiv')
+         CRES = f"C{CRES}"
+         grid_nc.close()
 
-      # Rename the regional_grid.nc file
-      grid_fn = f"{CRES}_grid.tile7.halo{NHW}.nc"
-      shutil.copy2(os.path.join("regional_grid.nc"),
-                   os.path.join(grid_fn))
+      # Rename the regional grid file
+      new_grid_fn = f"{CRES}_grid.tile7.halo1.nc"
+      shutil.copy2(os.path.join(grid_fn),
+                   os.path.join(new_grid_fn))
+
+      grid_fn = new_grid_fn
 
       # Shave the halo from NHW (default 6) to NH4 (always 4)
       # Create the "shave" namelist file
@@ -317,7 +324,7 @@ def HorizGrid(config_fn, stmp):
       shave_nl_fp = os.path.join(work_path, f"shave_{NH4}.in")
       print(shave_nl_fp)
       with open(shave_nl_fp,"w") as sh_fp:
-         s = (f'{grid_info["ESGgrid_NX"]} {grid_info["ESGgrid_NY"]} {NH4} '
+         s = (f'{grid_params["NX"]} {grid_params["NY"]} {NH4} '
               f'"{grid_fn}" "{halo_NH4_fp}"')
          sh_fp.write(s)
 
@@ -357,9 +364,9 @@ def HorizGrid(config_fn, stmp):
       wrt_lat2 = grid_params["LAT_CTR"]
 
       # Convert corner/face points from lat/lon to Lambert X,Y
-      lcc_grid_params = calc_grid_lambert_conformal(wrt_lon_ctr, wrt_lat_ctr,
-            lon_corners_face_midpts, lat_corners_face_midpts,
-            grid_info["ESGgrid_DELX"], grid_info["ESGgrid_DELY"])
+      #lcc_grid_params = calc_grid_lambert_conformal(wrt_lon_ctr, wrt_lat_ctr,
+      #      lon_corners_face_midpts, lat_corners_face_midpts,
+      #      grid_info["ESGgrid_DELX"], grid_info["ESGgrid_DELY"])
 
    # Generate the write grid for ESG grid type
    if grid_type == "ESG":
